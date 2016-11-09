@@ -2,13 +2,17 @@ package jhhmoviles.com.tictactoe;
 
 import android.app.Dialog;
 import android.content.DialogInterface;
+import android.content.SharedPreferences;
 import android.graphics.Color;
+import android.media.MediaPlayer;
+import android.os.Handler;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
+import android.view.MotionEvent;
 import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
@@ -27,28 +31,90 @@ public class AndroidTicTacToeActivity extends AppCompatActivity {
     static final int DIALOG_DIFFICULTY_ID = 0;
     static final int DIALOG_QUIT_ID = 1;
     static final int DIALOG_ABOUT_ID = 2;
+    private BoardView mBoardView;
+    MediaPlayer mHumanMediaPlayer;
+    MediaPlayer mComputerMediaPlayer;
+    private SharedPreferences mPrefs;
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+
+        mHumanMediaPlayer = MediaPlayer.create(getApplicationContext(), R.raw.sound1);
+        mComputerMediaPlayer = MediaPlayer.create(getApplicationContext(), R.raw.sound2);
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+
+        mHumanMediaPlayer.release();
+        mComputerMediaPlayer.release();
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
 
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_android_tic_tac_toe);
+        mPrefs = getSharedPreferences("ttt_prefs", MODE_PRIVATE);
+
+        // Restore the scores
+        scoreH = mPrefs.getInt("scoreH", 0);
+        scoreA = mPrefs.getInt("scoreA", 0);
+        scoreT = mPrefs.getInt("scoreT", 0);
+
+
         mGame = new TicTacToeGame();
-        mBoardButtons = new Button[mGame.getBOARD_SIZE()];
-        mBoardButtons[0] = (Button) findViewById(R.id.one);
-        mBoardButtons[1] = (Button) findViewById(R.id.two);
-        mBoardButtons[2] = (Button) findViewById(R.id.three);
-        mBoardButtons[3] = (Button) findViewById(R.id.four);
-        mBoardButtons[4] = (Button) findViewById(R.id.five);
-        mBoardButtons[5] = (Button) findViewById(R.id.six);
-        mBoardButtons[6] = (Button) findViewById(R.id.seven);
-        mBoardButtons[7] = (Button) findViewById(R.id.eight);
-        mBoardButtons[8] = (Button) findViewById(R.id.nine);
+        mBoardView = (BoardView) findViewById(R.id.board);
+        mBoardView.setGame(mGame);
+        // Listen for touches on the board
+        mBoardView.setOnTouchListener(mTouchListener);
 
         mInfoTextView = (TextView) findViewById(R.id.information);
         stats = (TextView) findViewById(R.id.score);
 
-        startNewGame();
+        if(savedInstanceState  == null) {
+            startNewGame();
+        } else{
+            // Restore the game's state
+            mGame.setBoardState(savedInstanceState.getCharArray("board"));
+            mGame.endGame = savedInstanceState.getBoolean("mGameOver");
+            mInfoTextView.setText(savedInstanceState.getCharSequence("info"));
+            scoreH = savedInstanceState.getInt("scoreH");
+            scoreA = savedInstanceState.getInt("scoreA");
+            scoreT = savedInstanceState.getInt("scoreT");
+            //mGame. = savedInstanceState.getChar("mGoFirst");
+        }
+        displayScores();
+    }
+    @Override
+    protected void onStop() {
+        super.onStop();
+
+        // Save the current scores
+        SharedPreferences.Editor ed = mPrefs.edit();
+        ed.putInt("scoreH", scoreH);
+        ed.putInt("scoreA", scoreA);
+        ed.putInt("scoreT", scoreT);
+        ed.commit();
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+
+        outState.putCharArray("board", mGame.getBoardState());
+        outState.putBoolean("mGameOver", mGame.endGame);
+        outState.putInt("scoreH", Integer.valueOf(scoreH));
+        outState.putInt("scoreA", Integer.valueOf(scoreA));
+        outState.putInt("scoreT", Integer.valueOf(scoreT));
+        outState.putCharSequence("info", mInfoTextView.getText());
+        outState.putChar("mGoFirst", 'X');
+    }
+
+    private void displayScores() {
+        stats.setText("Human: "+ scoreH +"   Ties: "+scoreT+"  Android: "+ scoreA);
     }
 
     public boolean onCreateOptionsMenuOld(Menu menu) {
@@ -56,6 +122,18 @@ public class AndroidTicTacToeActivity extends AppCompatActivity {
         menu.add("New Game");
         return true;
     }
+    @Override
+    protected void onRestoreInstanceState(Bundle savedInstanceState) {
+        super.onRestoreInstanceState(savedInstanceState);
+
+        mGame.setBoardState(savedInstanceState.getCharArray("board"));
+        mGame.endGame = savedInstanceState.getBoolean("mGameOver");
+        mInfoTextView.setText(savedInstanceState.getCharSequence("info"));
+        scoreH = savedInstanceState.getInt("scoreH");
+        scoreA = savedInstanceState.getInt("scoreA");
+        scoreT = savedInstanceState.getInt("scoreT");
+    }
+
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         super.onCreateOptionsMenu(menu);
@@ -75,6 +153,12 @@ public class AndroidTicTacToeActivity extends AppCompatActivity {
     public boolean onOptionsItemSelected(MenuItem item) {
         switch (item.getItemId()) {
             case R.id.new_game:
+                startNewGame();
+                return true;
+            case R.id.reset:
+                scoreH = 0;
+                scoreT = 0;
+                scoreA = 0;
                 startNewGame();
                 return true;
             case R.id.ai_difficulty:
@@ -177,26 +261,84 @@ public class AndroidTicTacToeActivity extends AppCompatActivity {
        mGame.clearBoard();
         mGame.endGame = false;
         // Reset all buttons
-        for (int i = 0; i < mBoardButtons.length; i++) {
-            mBoardButtons[i].setText("");
-            mBoardButtons[i].setEnabled(true);
-            mBoardButtons[i].setOnClickListener(new ButtonClickListener(i));
-        }
+
+        mBoardView.invalidate();   // Redraw the board
+
         // Human goes first
         mInfoTextView.setText(R.string.first_human);
 
 
     }
+    // Listen for touches on the board
+    private View.OnTouchListener mTouchListener = new View.OnTouchListener() {
+        public boolean onTouch(View v, MotionEvent event) {
 
-    private void setMove(char player, int location) {
+            // Determine which cell was touched
+            int col = (int) event.getX() / mBoardView.getBoardCellWidth();
+            int row = (int) event.getY() / mBoardView.getBoardCellHeight();
+            int pos = row * 3 + col;
 
-        mGame.setMove(player, location);
+            if (!mGame.endGame && setMove(TicTacToeGame.HUMAN_PLAYER, pos))	{
+
+                // If no winner yet, let the computer make a move
+                int winner = mGame.checkForWinner();
+                if (winner == 0) {
+                    mInfoTextView.setText(R.string.turn_computer);
+                    try {
+                        Thread.sleep(1500);
+                    } catch (InterruptedException e) {
+                        //handle
+                    }
+                    int move = mGame.getComputerMove();
+                    setMove(TicTacToeGame.COMPUTER_PLAYER, move);
+                    mComputerMediaPlayer.start();    // Play the sound effect
+
+                    winner = mGame.checkForWinner();
+                }
+
+                if (winner == 0)
+                    mInfoTextView.setText(R.string.turn_human);
+                else if (winner == 1) {
+                    mInfoTextView.setText(R.string.result_tie);
+                    scoreT++;
+                    mGame.endGame=true;
+                    stats.setText("Human: "+ scoreH +"   Ties: "+scoreT+"  Android: "+ scoreA);
+                }
+                else if (winner == 2) {
+                    mInfoTextView.setText(R.string.result_human_wins);
+                    scoreH++;
+                    mGame.endGame=true;
+                    stats.setText("Human: "+ scoreH +"   Ties: "+scoreT+"  Android: "+ scoreA);
+                }
+                else {
+                    mInfoTextView.setText(R.string.result_computer_wins);
+                    scoreA++;
+                    mGame.endGame=true;
+                    stats.setText("Human: "+ scoreH +"   Ties: "+scoreT+"  Android: "+ scoreA);
+                }
+            }
+
+// So we aren't notified of continued events when finger is moved
+            return false;
+        }
+    };
+
+    private boolean  setMove(char player, int location) {
+        if (mGame.setMove(player, location)) {
+            mBoardView.invalidate();   // Redraw the board
+            mHumanMediaPlayer.start();    // Play the sound effect
+
+            return true;
+        }
+        return false;
+
+        /*mGame.setMove(player, location);
         mBoardButtons[location].setEnabled(false);
         mBoardButtons[location].setText(String.valueOf(player));
         if (player == TicTacToeGame.HUMAN_PLAYER)
             mBoardButtons[location].setTextColor(Color.rgb(0, 200, 0));
         else
-            mBoardButtons[location].setTextColor(Color.rgb(200, 0, 0));
+            mBoardButtons[location].setTextColor(Color.rgb(200, 0, 0));*/
     }
 
 
@@ -218,6 +360,7 @@ public class AndroidTicTacToeActivity extends AppCompatActivity {
                     mInfoTextView.setText(R.string.turn_computer);
                     int move = mGame.getComputerMove();
                     setMove(TicTacToeGame.COMPUTER_PLAYER, move);
+                    mComputerMediaPlayer.start();    // Play the sound effect
                     winner = mGame.checkForWinner();
                 }
 

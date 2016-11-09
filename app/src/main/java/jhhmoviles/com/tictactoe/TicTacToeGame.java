@@ -15,6 +15,25 @@ public class TicTacToeGame {
     public static final char HUMAN_PLAYER = 'X';
     public static final char COMPUTER_PLAYER = 'O';
     public static final char OPEN_SPOT = ' ';
+
+    public char getBoardOccupant(int i) {
+        if(mBoard[i] == HUMAN_PLAYER){
+            return HUMAN_PLAYER;
+        } else if(mBoard[i] == COMPUTER_PLAYER){
+            return COMPUTER_PLAYER;
+        } else{
+            return ' ';
+        }
+    }
+
+    public char[] getBoardState() {
+        return mBoard;
+    }
+
+    public void setBoardState(char[] boardState) {
+        this.mBoard = boardState;
+    }
+
     // The computer's difficulty levels
     public enum DifficultyLevel {Easy, Harder, Expert};
 
@@ -40,10 +59,12 @@ public class TicTacToeGame {
      * @param player - The HUMAN_PLAYER or COMPUTER_PLAYER
      * @param location - The location (0-8) to place the move
      */
-    public void setMove(char player, int location){
+    public boolean setMove(char player, int location){
         if(mBoard[location] == OPEN_SPOT){
             mBoard[location] = player;
+            return true;
         }
+        return false;
     }
     public DifficultyLevel getDifficultyLevel() {
         return mDifficultyLevel;
