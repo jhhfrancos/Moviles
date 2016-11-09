@@ -2,10 +2,12 @@ package jhhmoviles.com.tictactoe;
 
 import android.app.Dialog;
 import android.content.DialogInterface;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.media.MediaPlayer;
 import android.os.Handler;
+import android.preference.PreferenceManager;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
@@ -35,6 +37,7 @@ public class AndroidTicTacToeActivity extends AppCompatActivity {
     MediaPlayer mHumanMediaPlayer;
     MediaPlayer mComputerMediaPlayer;
     private SharedPreferences mPrefs;
+    private boolean mSoundOn = true;
 
     @Override
     protected void onResume() {
@@ -57,14 +60,6 @@ public class AndroidTicTacToeActivity extends AppCompatActivity {
 
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_android_tic_tac_toe);
-        mPrefs = getSharedPreferences("ttt_prefs", MODE_PRIVATE);
-
-        // Restore the scores
-        scoreH = mPrefs.getInt("scoreH", 0);
-        scoreA = mPrefs.getInt("scoreA", 0);
-        scoreT = mPrefs.getInt("scoreT", 0);
-
-
         mGame = new TicTacToeGame();
         mBoardView = (BoardView) findViewById(R.id.board);
         mBoardView.setGame(mGame);
@@ -73,6 +68,23 @@ public class AndroidTicTacToeActivity extends AppCompatActivity {
 
         mInfoTextView = (TextView) findViewById(R.id.information);
         stats = (TextView) findViewById(R.id.score);
+
+        // Restore the scores from the persistent preference data source
+        mPrefs = PreferenceManager.getDefaultSharedPreferences(this);
+        mSoundOn = mPrefs.getBoolean("sound", true);
+        // Restore the scores
+        scoreA = mPrefs.getInt("scoreA", 0);
+        scoreT = mPrefs.getInt("scoreT", 0);
+        scoreH = mPrefs.getInt("scoreH", 0);
+        // Restore Difficulty
+        String difficultyLevel = mPrefs.getString("difficulty_level", getResources().getString(R.string.difficulty_harder));
+        if (difficultyLevel.equals(getResources().getString(R.string.difficulty_easy)))
+            mGame.setDifficultyLevel(TicTacToeGame.DifficultyLevel.Easy);
+        else if (difficultyLevel.equals(getResources().getString(R.string.difficulty_harder)))
+            mGame.setDifficultyLevel(TicTacToeGame.DifficultyLevel.Harder);
+        else
+            mGame.setDifficultyLevel(TicTacToeGame.DifficultyLevel.Expert);
+
 
         if(savedInstanceState  == null) {
             startNewGame();
@@ -161,8 +173,9 @@ public class AndroidTicTacToeActivity extends AppCompatActivity {
                 scoreA = 0;
                 startNewGame();
                 return true;
-            case R.id.ai_difficulty:
-                showDialog(DIALOG_DIFFICULTY_ID);
+            case R.id.ai_settings:
+                startActivityForResult(new Intent(this, Settings.class), 0);
+                //showDialog(DIALOG_DIFFICULTY_ID);
                 return true;
             case R.id.quit:
                 showDialog(DIALOG_QUIT_ID);
@@ -254,7 +267,25 @@ public class AndroidTicTacToeActivity extends AppCompatActivity {
         return dialog;
     }
 
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
 
+        if (requestCode == RESULT_CANCELED) {
+            // Apply potentially new settings
+
+            mSoundOn = mPrefs.getBoolean("sound", true);
+
+            String difficultyLevel = mPrefs.getString("difficulty_level",
+                    getResources().getString(R.string.difficulty_harder));
+
+            if (difficultyLevel.equals(getResources().getString(R.string.difficulty_easy)))
+                mGame.setDifficultyLevel(TicTacToeGame.DifficultyLevel.Easy);
+            else if (difficultyLevel.equals(getResources().getString(R.string.difficulty_harder)))
+                mGame.setDifficultyLevel(TicTacToeGame.DifficultyLevel.Harder);
+            else
+                mGame.setDifficultyLevel(TicTacToeGame.DifficultyLevel.Expert);
+        }
+    }
 
     // Set up the game board.
     private void startNewGame() {
@@ -291,6 +322,7 @@ public class AndroidTicTacToeActivity extends AppCompatActivity {
                     }
                     int move = mGame.getComputerMove();
                     setMove(TicTacToeGame.COMPUTER_PLAYER, move);
+                    if(mSoundOn)
                     mComputerMediaPlayer.start();    // Play the sound effect
 
                     winner = mGame.checkForWinner();
@@ -305,10 +337,12 @@ public class AndroidTicTacToeActivity extends AppCompatActivity {
                     stats.setText("Human: "+ scoreH +"   Ties: "+scoreT+"  Android: "+ scoreA);
                 }
                 else if (winner == 2) {
-                    mInfoTextView.setText(R.string.result_human_wins);
+
                     scoreH++;
                     mGame.endGame=true;
                     stats.setText("Human: "+ scoreH +"   Ties: "+scoreT+"  Android: "+ scoreA);
+                    String defaultMessage = getResources().getString(R.string.result_human_wins);
+                    mInfoTextView.setText(mPrefs.getString("victory_message", defaultMessage));
                 }
                 else {
                     mInfoTextView.setText(R.string.result_computer_wins);
@@ -326,7 +360,8 @@ public class AndroidTicTacToeActivity extends AppCompatActivity {
     private boolean  setMove(char player, int location) {
         if (mGame.setMove(player, location)) {
             mBoardView.invalidate();   // Redraw the board
-            mHumanMediaPlayer.start();    // Play the sound effect
+            if(mSoundOn)
+                mHumanMediaPlayer.start();    // Play the sound effect
 
             return true;
         }
@@ -360,6 +395,7 @@ public class AndroidTicTacToeActivity extends AppCompatActivity {
                     mInfoTextView.setText(R.string.turn_computer);
                     int move = mGame.getComputerMove();
                     setMove(TicTacToeGame.COMPUTER_PLAYER, move);
+                    if(mSoundOn)
                     mComputerMediaPlayer.start();    // Play the sound effect
                     winner = mGame.checkForWinner();
                 }
